@@ -2,6 +2,7 @@
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/ubuntu:20.04
 RUN apt-get update && apt-get install -y systemd sudo
 RUN useradd --create-home pcpbuild
+RUN useradd pcp
 RUN echo 'pcpbuild ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/pcpbuild
 
 # allow services to be started during installation
@@ -16,4 +17,21 @@ RUN apt-get install -y ed expect flex g++ gawk gcc gdb gfs2-utils git iproute2 j
     libavahi-common-dev libbpf-dev libbpf0 libclass-dbi-perl libcmocka-dev libcoin-dev 
 
 RUN apt-get install -y apache2 apache2-bin autoconf autotools-dev avahi-utils bc bind9-host bison bpfcc-tools bpftrace bsd-mailx build-essential chrpath clang cppcheck cron curl debhelper dh-python dpkg-dev ed expect flex g++ gawk gcc gdb gfs2-utils git iproute2 jq libavahi-common-dev libbpf-dev libbpf0 libclass-dbi-perl libcmocka-dev libcoin-dev libdbd-mysql-perl libdbd-pg-perl libdevmapper-dev libextutils-autoinstall-perl libfile-slurp-perl libgl1-mesa-dri libibmad-dev libibumad-dev libjson-perl liblist-moreutils-perl liblzma-dev libncurses-dev libncurses5-dev libnet-snmp-perl libperl5.30 libpfm4-dev libpython3-dev libqt5svg5-dev libreadline-dev librrds-perl libsasl2-dev libsasl2-modules libsoqt520-dev libspreadsheet-read-perl libspreadsheet-readsxc-perl libspreadsheet-writeexcel-perl libspreadsheet-xlsx-perl libssl-dev libsystemd-dev libtext-csv-xs-perl libtimedate-perl libuv1-dev libvirt-daemon libvirt-daemon-system libxml-libxml-perl libxml-tokeparser-perl libyaml-libyaml-perl llvm lm-sensors make man-db mandoc mariadb-client-core-10.3 memcached net-tools nmap openjdk-11-jre-headless openssl perl perl-modules-5.30 pkg-config postgresql-client-common psmisc pylint python3-all python3-all-dev python3-bpfcc python3-dev python3-elasticsearch python3-json-pointer python3-libvirt python3-lxml python3-openpyxl python3-pil python3-prometheus-client python3-psycopg2 python3-pymongo python3-pyodbc python3-requests python3-setuptools python3-six qtbase5-dev qtbase5-dev-tools qtchooser redis-redisearch redis-server redis-tools sasl2-bin smartmontools socat sysstat systemtap systemtap-sdt-dev time unbound valgrind xfsprogs xkb-data
+
+
+RUN mkdir -p /build
+COPY ./pcp /build/pcp
+
+# build
+RUN cd /build/pcp && ./configure \
+  --prefix=/usr --libexecdir=/usr/lib --sysconfdir=/etc \
+  --localstatedir=/var --with-rcdir=/etc/init.d --with-sysconfigdir=/etc/default \
+  --with-zip=/bin/gzip --with-tar=/bin/tar SED=/bin/sed ECHO=/bin/echo \
+  QMAKE=/usr/bin/qmake MAKEDEPEND=/bin/true BZIP2=/bin/bzip2
+  
+RUN cd /build/pcp && make -j20 V=1
+RUN cd /build/pcp && make install V=1 -j20
+RUN service pmcd restart && service pmproxy restart
+# 编译本地的 pcp
+
 CMD ["/usr/bin/systemd"]
